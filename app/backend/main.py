@@ -4,11 +4,24 @@ from pathlib import Path
 import json
 from .orchestrator.state import SceneState
 from .orchestrator.router import Director
+from chatterbox.tts import ChatterboxTTS
+import torch
+import torchaudio
 
 app = FastAPI()
+
+# --- TTS Model ---
+# Load on startup, so it's ready for requests.
+# Using CPU for wider compatibility, but CUDA would be faster.
+try:
+    tts_model = ChatterboxTTS.from_pretrained(device="cpu")
+except Exception as e:
+    print(f"WARN: Could not load ChatterboxTTS model: {e}")
+    tts_model = None
+
 scene_path = Path("scenes/family_party.yaml")
 state = SceneState.from_yaml(scene_path)
-director = Director(state)
+director = Director(state, tts_model=tts_model)
 
 @app.get("/")
 async def root():

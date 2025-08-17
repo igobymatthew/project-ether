@@ -166,6 +166,17 @@
   // ------------------ TTS with Ducking ------------------
   const synth = window.speechSynthesis;
 
+  function playAudioWithDuck(url) {
+    if (!url) return;
+    const audio = new Audio(url);
+    audio.oncanplaythrough = () => {
+      AE.duck();
+      audio.play();
+    };
+    audio.onended = () => AE.unduck();
+    audio.onerror = () => AE.unduck();
+  }
+
   function speakWithDuck(text) {
     if (!text) return;
     const ut = new SpeechSynthesisUtterance(text);
@@ -173,7 +184,7 @@
     ut.onstart = () => AE.duck();
     ut.onend = () => AE.unduck();
     ut.onerror = () => AE.unduck();
-    synth.cancel();           // simple interruption behavior
+    synth.cancel();
     synth.speak(ut);
   }
 
@@ -199,7 +210,15 @@
     // Start audio context on first meaningful event
     await AE.start();
 
-    if(fg.line){ speakWithDuck(fg.line); log(fg.speaker + ": " + fg.line); }
+    if (fg.line) {
+      const isAudioURL = fg.line.endsWith(".wav");
+      if (isAudioURL) {
+        playAudioWithDuck(fg.line);
+      } else {
+        speakWithDuck(fg.line); // Fallback for text-only
+      }
+      log(fg.speaker + ": " + (fg.transcript || fg.line));
+    }
 
     // Background asides -> play quick one-shots and log
     (plan.background || []).forEach(async (b) => {
