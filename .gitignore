@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+.Python
+env/
+.venv/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# VSCode / PyCharm
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Audio/asset cache (keep small wav/mp3 if needed)
+*.mp3
+*.wav
+!app/frontend/assets/sfx/*.wav
+!app/frontend/assets/sfx/*.mp3

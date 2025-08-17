@@ -1,0 +1,162 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Project Ether (AudioLLMParty) — Preview</title>
+  <desc id="desc">2x2 call tiles for Mom, Brother, Uncle, Cousin with speech bubbles, background walla, and active-speaker highlight.</desc>
+
+  <!-- ===== Background ===== -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#121a2b"/>
+    </linearGradient>
+
+    <!-- Subtle glow for active speaker -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Card shadow -->
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Speech bubble symbol -->
+    <symbol id="bubble" viewBox="0 0 300 120">
+      <path d="M20,12 h240 a12,12 0 0 1 12,12 v52 a12,12 0 0 1-12,12 h-118 l-26,24 8-24 h-104 a12,12 0 0 1-12-12 v-52 a12,12 0 0 1 12-12 z"
+            fill="#0f1522" stroke="#2b3a55" stroke-width="2"/>
+    </symbol>
+
+    <!-- Tiny bubble -->
+    <symbol id="bubbleSmall" viewBox="0 0 220 90">
+      <path d="M16,10 h168 a10,10 0 0 1 10,10 v36 a10,10 0 0 1-10,10 h-78 l-20,18 6-18 h-76 a10,10 0 0 1-10-10 v-36 a10,10 0 0 1 10-10 z"
+            fill="#0f1522" stroke="#2b3a55" stroke-width="2"/>
+    </symbol>
+
+    <!-- Soft grid lines -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a2130" stroke-width="1"/>
+    </pattern>
+
+    <!-- Waveform path for "walla" -->
+    <path id="wave"
+          d="M0,0 C20,-6 40,6 60,0 80,-6 100,6 120,0 140,-6 160,6 180,0 200,-6 220,6 240,0 260,-6 280,6 300,0 320,-6 340,6 360,0 380,-6 400,6 420,0 440,-6 460,6 480,0"
+          fill="none" stroke="#415a8a" stroke-width="2" stroke-opacity="0.35"/>
+  </defs>
+
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="675" fill="url(#grid)" opacity="0.25"/>
+
+  <!-- ===== Header ===== -->
+  <g transform="translate(60,48)">
+    <text x="0" y="0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto" font-size="28" fill="#e8f1ff" font-weight="700">
+      Project Ether (AudioLLMParty)
+    </text>
+    <text x="0" y="28" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto" font-size="14" fill="#9cb7df">
+      LLM-driven group call sim • background walla • ducked speech • handoffs
+    </text>
+  </g>
+
+  <!-- ===== Background walla waveform strip ===== -->
+  <g transform="translate(60,92)" opacity="0.6">
+    <g transform="translate(0,0)"><use href="#wave"/><use href="#wave" transform="translate(480,0)"/><use href="#wave" transform="translate(960,0)"/></g>
+    <g transform="translate(0,24)" opacity="0.7"><use href="#wave"/><use href="#wave" transform="translate(480,0)"/><use href="#wave" transform="translate(960,0)"/></g>
+    <g transform="translate(0,48)" opacity="0.5"><use href="#wave"/><use href="#wave" transform="translate(480,0)"/><use href="#wave" transform="translate(960,0)"/></g>
+  </g>
+
+  <!-- ===== Tile positions/sizes ===== -->
+  <!-- layout: margins 60/60, gap 40; tile 520x260 -->
+  <!-- Row 1: Mom, Brother -->
+  <!-- Row 2: Uncle, Cousin -->
+
+  <!-- Active halo for Mom -->
+  <rect x="52" y="102" rx="26" ry="26" width="536" height="276" fill="#2aa3ff" opacity="0.18" filter="url(#glow)"/>
+
+  <!-- Mom tile -->
+  <g transform="translate(60,110)" filter="url(#shadow)">
+    <rect width="520" height="260" rx="22" ry="22" fill="#141a25" stroke="#2b3a55" stroke-width="2"/>
+    <text x="20" y="32" font-family="ui-sans-serif,system-ui" font-size="16" fill="#cfe5ff">Mother (active)</text>
+    <!-- Faux video gradient -->
+    <linearGradient id="vid1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#182131"/>
+      <stop offset="100%" stop-color="#0d1220"/>
+    </linearGradient>
+    <rect x="16" y="46" width="488" height="170" rx="14" fill="url(#vid1)"/>
+    <!-- Simple level meter -->
+    <rect x="16" y="224" width="488" height="12" rx="6" fill="#0f1522" stroke="#233147" stroke-width="1"/>
+    <rect x="16" y="224" width="220" height="12" rx="6" fill="#3aa8ff"/>
+
+    <!-- Mom speech bubble -->
+    <g transform="translate(360,-58)">
+      <use href="#bubble"/>
+      <text x="40" y="44" font-family="ui-sans-serif,system-ui" font-size="16" fill="#d8e8ff">Love you—are you eating ok?</text>
+    </g>
+  </g>
+
+  <!-- Brother tile -->
+  <g transform="translate(620,110)" filter="url(#shadow)">
+    <rect width="520" height="260" rx="22" ry="22" fill="#141a25" stroke="#2b3a55" stroke-width="2"/>
+    <text x="20" y="32" font-family="ui-sans-serif,system-ui" font-size="16" fill="#cfe5ff">Brother</text>
+    <linearGradient id="vid2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a2333"/>
+      <stop offset="100%" stop-color="#0e1422"/>
+    </linearGradient>
+    <rect x="16" y="46" width="488" height="170" rx="14" fill="url(#vid2)"/>
+    <rect x="16" y="224" width="488" height="12" rx="6" fill="#0f1522" stroke="#233147" stroke-width="1"/>
+    <rect x="16" y="224" width="120" height="12" rx="6" fill="#6fd1ff"/>
+
+    <!-- Brother aside bubble (small) -->
+    <g transform="translate(300,-32)">
+      <use href="#bubbleSmall"/>
+      <text x="28" y="38" font-family="ui-sans-serif,system-ui" font-size="14" fill="#d8e8ff">broham, what it be?!</text>
+    </g>
+  </g>
+
+  <!-- Uncle tile -->
+  <g transform="translate(60,410)" filter="url(#shadow)">
+    <rect width="520" height="260" rx="22" ry="22" fill="#141a25" stroke="#2b3a55" stroke-width="2"/>
+    <text x="20" y="32" font-family="ui-sans-serif,system-ui" font-size="16" fill="#cfe5ff">Uncle</text>
+    <linearGradient id="vid3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#182030"/>
+      <stop offset="100%" stop-color="#0c111e"/>
+    </linearGradient>
+    <rect x="16" y="46" width="488" height="170" rx="14" fill="url(#vid3)"/>
+    <rect x="16" y="224" width="488" height="12" rx="6" fill="#0f1522" stroke="#233147" stroke-width="1"/>
+    <rect x="16" y="224" width="80" height="12" rx="6" fill="#4fb7ff"/>
+
+    <!-- Uncle aside -->
+    <g transform="translate(24,-30)">
+      <use href="#bubbleSmall"/>
+      <text x="30" y="38" font-family="ui-sans-serif,system-ui" font-size="14" fill="#d8e8ff">(muffled) save me a plate!</text>
+    </g>
+  </g>
+
+  <!-- Cousin tile -->
+  <g transform="translate(620,410)" filter="url(#shadow)">
+    <rect width="520" height="260" rx="22" ry="22" fill="#141a25" stroke="#2b3a55" stroke-width="2"/>
+    <text x="20" y="32" font-family="ui-sans-serif,system-ui" font-size="16" fill="#cfe5ff">Cousin</text>
+    <linearGradient id="vid4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a2436"/>
+      <stop offset="100%" stop-color="#0c111e"/>
+    </linearGradient>
+    <rect x="16" y="46" width="488" height="170" rx="14" fill="url(#vid4)"/>
+    <rect x="16" y="224" width="488" height="12" rx="6" fill="#0f1522" stroke="#233147" stroke-width="1"/>
+    <rect x="16" y="224" width="60" height="12" rx="6" fill="#3aa8ff"/>
+
+    <!-- Cousin aside -->
+    <g transform="translate(294,-28)">
+      <use href="#bubbleSmall"/>
+      <text x="28" y="38" font-family="ui-sans-serif,system-ui" font-size="14" fill="#d8e8ff">Wait—smile for the thing!</text>
+    </g>
+  </g>
+
+  <!-- Ducking label -->
+  <g transform="translate(60,350)" opacity="0.9">
+    <rect x="0" y="0" width="300" height="36" rx="8" fill="#0f1522" stroke="#2b3a55"/>
+    <text x="16" y="24" font-family="ui-sans-serif,system-ui" font-size="14" fill="#b8d4ff">
+      Foreground speech ducks background walla −14 dB
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+{
+  "speaker": "mother",
+  "text": "Just a sec, I’ll grab your brother. Love you—are you eating ok?",
+  "ssml": "<speak><prosody rate='95%'>...</prosody></speak>",
+  "bg_duck_db": -14,
+  "timing": {"lead_ms": 150, "trail_ms": 300},
+  "stage": "Handoff"
+}

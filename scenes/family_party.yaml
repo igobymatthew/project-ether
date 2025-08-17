@@ -1,0 +1,44 @@
+scene_id: family_party
+title: "Family Call: Living Room Chaos"
+roomtone: "sfx/roomtone_livingroom.wav"
+walla_beds:
+  - "sfx/walla_family_casual_1.wav"
+  - "sfx/cutlery_clink_1.wav"
+  - "sfx/kids_scatter_1.wav"
+intensity: 0.6   # 0-1 background energy
+characters:
+  foreground: ["mother"]
+  nearby: ["brother"]
+  background: ["uncle", "kid", "cousin"]
+rules:
+  must_hit_lines:
+    - character: mother
+      line_hint: "Are you eating ok?"
+      within_seconds: 90
+  handoff_triggers:
+    - when_user_mentions: ["brother", "can I talk to", "hand me to", "put him on"]
+      from: "mother"
+      to: "brother"
+timing:
+  handoff_min_s: 4
+  handoff_max_s: 8
+overlap:
+  max_ms: 600
+ducking_db: -14
+tts:
+  voice_map:
+    mother: "voice_mom_a"
+    brother: "voice_bro_b"
+    uncle: "voice_uncle_c"
+    kid: "voice_kid_d"
+background_asides:
+  - speaker: "uncle"
+    lines: ["(muffled) save me a plate!", "(far) who moved my hat?"]
+  - speaker: "kid"
+    lines: ["Mom! Where’s the charger?", "I didn’t touch it!"]
+  - speaker: "cousin"
+    lines: ["You calling? Tell them hi!", "Wait—smile for the thing!"]
+safety:
+  pg13: true
+  blocked_topics: ["politics", "medical advice", "financial advice", "slurs"]
+stop_words: ["end call", "stop", "too loud"]

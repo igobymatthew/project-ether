@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>project-ether (MVP)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    body { font-family: ui-sans-serif, system-ui; margin: 0; background: #0b0c10; color: #eee; }
+    header { padding: 14px 16px; background: #11141a; border-bottom: 1px solid #222; }
+    .wrap { padding: 16px; display: grid; gap: 12px; }
+    .tiles { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; }
+    .tile { background: #141922; border: 1px solid #263042; border-radius: 16px; padding: 12px; min-height: 160px; position: relative; }
+    .active { outline: 2px solid #6cf; }
+    .name { position: absolute; bottom: 8px; left: 12px; padding: 4px 8px; background: rgba(0,0,0,.45); border-radius: 8px; font-size: 12px; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    button, input[type="range"] { background: #1a2130; color: #e5f2ff; border: 1px solid #2b3a55; padding: 10px 14px; border-radius: 10px; }
+    textarea { width: 100%; min-height: 70px; background: #0f131a; color: #def; border: 1px solid #2b3a55; border-radius: 8px; padding: 8px; }
+    .log { font-family: ui-monospace, monospace; background: #0f131a; border: 1px solid #2b3a55; padding: 8px; border-radius: 8px; height: 160px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header><strong>Ether — MVP</strong></header>
+  <div class="wrap">
+    <div class="tiles">
+      <div id="tile-mother" class="tile active"><div class="name">Mother</div></div>
+      <div id="tile-brother" class="tile"><div class="name">Brother</div></div>
+    </div>
+
+    <div class="controls">
+      <button id="dial">Dial</button>
+      <button id="askBro">“Can I talk to my brother?”</button>
+      <button id="end">End Call</button>
+      <label>BG Energy <input id="bg" type="range" min="0" max="1" step="0.05" value="0.6"></label>
+    </div>
+
+    <textarea id="say" placeholder="Type what you say (e.g., “Hey Mom!”)"></textarea>
+    <button id="send">Send</button>
+
+    <div class="log" id="log"></div>
+  </div>
+
+<script>
+  // ------------------ Audio Engine (WebAudio) ------------------
+  class AudioEngine {
+    constructor() {
+      this.ctx = null;
+      this.master = null;
+      this.bgBus = null;
+      this.bgGain = null;
+      this.oneShotBus = null;
+      this.bgLoops = [];
+      this.bgDefaultDb = -6; // idle background target
+      this.duckDb = -14;     // duck depth while speaking
+      this.restoreT = 0.25;  // seconds
+      this.duckT = 0.06;     // seconds
+      this.assetsBase = "assets/sfx/"; // adjust if needed
+      this._started = false;
+    }
+
+    async start() {
+      if (this._started) return;
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 1.0;
+      this.master.connect(this.ctx.destination);
+
+      this.bgBus = this.ctx.createGain();
+      this.bgGain = this.bgBus.gain;
+      this.bgGain.value = this.dbToGain(this.bgDefaultDb);
+      this.bgBus.connect(this.master);
+
+      this.oneShotBus = this.ctx.createGain();
+      this.oneShotBus.gain.value = 1.0;
+      this.oneShotBus.connect(this.master);
+
+      // Preload and start loops
+      await this._loadAndLoop("roomtone_livingroom.wav", 1.0);
+      await this._loadAndLoop("walla_family_casual_1.wav", 0.8);
+
+      this._started = true;
+    }
+
+    async _loadBuffer(url) {
+      const res = await fetch(url);
+      const arr = await res.arrayBuffer();
+      return await this.ctx.decodeAudioData(arr);
+    }
+
+    async _loadAndLoop(file, gain=1.0) {
+      const buf = await this._loadBuffer(this.assetsBase + file);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const g = this.ctx.createGain();
+      g.gain.value = gain;
+      src.connect(g).connect(this.bgBus);
+      src.start(0);
+      this.bgLoops.push({src, g});
+    }
+
+    setBgEnergy(v) {
+      // v: 0..1 from UI slider
+      const targetDb = -24 + (v * 18); // maps 0=>-24dB .. 1=>-6dB
+      this.bgDefaultDb = targetDb;
+      this._rampBgTo(targetDb, 0.2);
+    }
+
+    duck() {
+      // drop to duckDb quickly
+      this._rampBgTo(this.duckDb, this.duckT);
+    }
+
+    unduck() {
+      // restore to default smoothly
+      this._rampBgTo(this.bgDefaultDb, this.restoreT);
+    }
+
+    _rampBgTo(db, t) {
+      const now = this.ctx.currentTime;
+      const val = this.dbToGain(db);
+      this.bgGain.cancelScheduledValues(now);
+      this.bgGain.setTargetAtTime(val, now, Math.max(0.01, t / 4)); // exp approach
+    }
+
+    dbToGain(db) { return Math.pow(10, db/20); }
+
+    async playOneShot(file, db=-6) {
+      const buf = await this._loadBuffer(this.assetsBase + file);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const g = this.ctx.createGain();
+      g.gain.value = this.dbToGain(db);
+      src.connect(g).connect(this.oneShotBus);
+      src.start();
+    }
+
+    // Convenience for “near/far” asides
+    // async playAside(proximity="near") {
+    //   if (proximity === "far") {
+    //     await this.playOneShot("aside_distant_chatter.wav", -14);
+    //   } else {
+    //     await this.playOneShot("aside_chair_scrape.wav", -10);
+    //   }
+    // }
+    // Convenience for “near/far” asides with fallback
+    async playAside(proximity="near") {
+      const tryPlay = async (file, db) => {
+        try { await this.playOneShot(file, db); return true; } catch (_) { return false; }
+      };
+      if (proximity === "far") {
+        // try distant, fall back to chair scrape
+        const ok = await tryPlay("aside_distant_chatter.wav", -14);
+        if (!ok) await tryPlay("aside_chair_scrape.wav", -12);
+      } else {
+        // near default, fall back to distant if present
+        const ok = await tryPlay("aside_chair_scrape.wav", -10);
+        if (!ok) await tryPlay("aside_distant_chatter.wav", -12);
+      }
+    }
+
+  }
+
+  // Singleton
+  const AE = new AudioEngine();
+
+  // ------------------ TTS with Ducking ------------------
+  const synth = window.speechSynthesis;
+
+  function speakWithDuck(text) {
+    if (!text) return;
+    const ut = new SpeechSynthesisUtterance(text);
+    ut.rate = 1.0;
+    ut.onstart = () => AE.duck();
+    ut.onend = () => AE.unduck();
+    ut.onerror = () => AE.unduck();
+    synth.cancel();           // simple interruption behavior
+    synth.speak(ut);
+  }
+
+  // ------------------ Existing UI + WS glue (updated) ------------------
+  let ws, sceneTitle = "";
+
+  function log(s){
+    const el = document.getElementById("log");
+    el.textContent += s + "\n";
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setActive(speaker){
+    document.getElementById("tile-mother").classList.toggle("active", speaker==="mother");
+    document.getElementById("tile-brother").classList.toggle("active", speaker==="brother");
+  }
+
+  async function handlePlan(plan){
+    if(plan.controls?.end_call){ log("[system] call ended"); return; }
+    const fg = plan.foreground || {};
+    setActive(fg.speaker || "mother");
+
+    // Start audio context on first meaningful event
+    await AE.start();
+
+    if(fg.line){ speakWithDuck(fg.line); log(fg.speaker + ": " + fg.line); }
+
+    // Background asides -> play quick one-shots and log
+    (plan.background || []).forEach(async (b) => {
+      log("bg " + b.speaker + ": " + b.line);
+      // small chance to toss an audible aside
+      if (Math.random() < 0.6) { await AE.playAside(b.proximity || "near"); }
+    });
+  }
+
+  // Wire up controls
+  document.getElementById("dial").onclick = async () => {
+    await AE.start(); // user gesture unlocks audio
+    ws = new WebSocket("ws://localhost:8000/ws");
+    ws.onopen = () => log("[ws] connected");
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      if(msg.type === "hello"){ sceneTitle = msg.title; log("[scene] " + msg.title); }
+      if(msg.type === "plan"){ handlePlan(msg.data); }
+    };
+    ws.onclose = () => log("[ws] closed");
+  };
+
+  document.getElementById("send").onclick = () => {
+    const text = document.getElementById("say").value.trim();
+    if(!text || !ws) return;
+    ws.send(JSON.stringify({type:"user_transcript", text}));
+    log("you: " + text);
+    document.getElementById("say").value = "";
+  };
+
+  document.getElementById("askBro").onclick = () => {
+    if(!ws) return;
+    ws.send(JSON.stringify({type:"user_transcript", text:"can I talk to my brother?"}));
+    log('you: can I talk to my brother?');
+  };
+
+  document.getElementById("end").onclick = () => {
+    if(ws){ ws.send(JSON.stringify({type:"end_call"})); ws.close(); }
+  };
+
+  document.getElementById("bg").oninput = (e) => {
+    AE.setBgEnergy(parseFloat(e.target.value || "0.6"));
+    if(ws){ ws.send(JSON.stringify({type:"set_bg_energy", value: e.target.value})); }
+  };
+</script>
+
+</body>
+</html>

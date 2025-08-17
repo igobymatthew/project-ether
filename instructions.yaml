@@ -1,0 +1,269 @@
+version: 1.0
+project_id: project-ether
+last_updated: 2025-08-15
+
+meta:
+  title: "Project Ether Phone Party Simulator"
+  description: "Simulate a lively, familiar multi-speaker video-call with warm handoffs, background walla, and short, speakable lines."
+  owners: ["you"]
+  licenses:
+    content: "Royalty-free SFX only; verify for commercial use"
+    code: "MIT (project code), see LICENSE"
+  non_goals:
+    - "Spoofing real people or caller ID"
+    - "Collecting personal data"
+    - "Open-ended chat beyond scene scope"
+
+rules:
+  impersonation: "No real-person impersonation; use fictional archetypes only."
+  rating: "PG-13"
+  blocked_topics: ["slurs", "harassment", "politics", "medical_advice", "financial_advice", "pii_claims"]
+  stop_words: ["end call", "stop", "too loud"]
+  overlaps:
+    enabled: true
+    max_ms: 600
+  ducking_db:
+    foreground_speaking: -14     # background bus during speech
+    idle_target: -6              # typical background target when idle
+    min_bg: -24                  # lower bound for quiet slider
+  must_hit_lines:
+    - character: "mother"
+      hint: "Are you eating ok?"
+      within_seconds: 90
+  handoff_triggers:
+    - from: "mother"
+      to: "brother"
+      user_mentions: ["brother", "can I talk to", "hand me to", "put him on"]
+      window_seconds: [4, 8]
+
+architecture:
+  frontend:
+    stack: ["HTML", "Vanilla JS or React", "WebAudio", "WebSocket"]
+    ui_principles:
+      - "Clear foreground speaker highlight"
+      - "Subtle tile motion; no exact FaceTime assets"
+      - "Big End button; quick 'Hand me to…' shortcuts"
+      - "Captions toggle"
+    audio:
+      buses:
+        - id: "bgBus"
+          type: "loop"
+          sources: ["roomtone", "walla", "kitchen_clatter?"]
+        - id: "oneShotBus"
+          type: "oneshots"
+          sources: ["aside_chair", "aside_far_chatter"]
+      ducking:
+        on_foreground_tts_start: "duck to rules.ducking_db.foreground_speaking"
+        on_foreground_tts_end: "restore to current idle_target"
+  backend:
+    stack: ["FastAPI", "WebSocket"]
+    modules:
+      - orchestrator/state.py
+      - orchestrator/router.py
+      - orchestrator/intents.py
+      - orchestrator/nlg.py
+      - orchestrator/safety.py
+    state_machine:
+      stages: ["Dialing", "Greeting", "ForegroundTalk", "Handoff", "Wrap"]
+      initial_stage: "Greeting"
+  llm:
+    mode: "single_model_mvp"     # options: single_model_mvp | two_model_future
+    outputs:
+      plan_shape:
+        foreground: { speaker: "id", line: "short text", aside: "optional" }
+        background: [{ speaker: "id", line: "very short", proximity: "near|far" }]
+        controls: { ducking_db: -14, overlap_ms: 350, handoff_to: "id|none", end_call: "bool?" }
+    character_utterance_max_sec: 7
+    persistence:
+      session_memory: "short_summary_in_state.memory"
+      cross_session: false
+
+paths:
+  root: "."
+  scripts: "scripts"
+  agents: "agents"
+  scenes: "scenes"
+  prompts: "prompts"
+  frontend: "app/frontend"
+  backend: "app/backend"
+  sfx: "app/frontend/assets/sfx"
+
+files:
+  required:
+    - "requirements.txt"
+    - "scripts/make_agents.py"
+    - "agents/_scaffold.yaml"
+    - "prompts/director.system.md"
+    - "prompts/character.system.md"
+    - "scenes/family_party.yaml"
+    - "app/backend/main.py"
+    - "app/backend/orchestrator/state.py"
+    - "app/backend/orchestrator/router.py"
+    - "app/backend/orchestrator/intents.py"
+    - "app/backend/orchestrator/nlg.py"
+    - "app/backend/orchestrator/safety.py"
+    - "app/frontend/index.html"
+  optional:
+    - "README.md"
+    - "LICENSE"
+
+agents:
+  scaffold_file: "agents/_scaffold.yaml"
+  autogen:
+    script: "scripts/make_agents.py"
+    generates:
+      personas: "agents/*.json"
+      prompts:
+        - "prompts/director.system.md"
+        - "prompts/character.system.md"
+      default_scene_if_missing: "scenes/family_party.yaml"
+  persona_contract:
+    fields:
+      - id
+      - archetype
+      - signature[]         # common catchphrases
+      - style               # politeness|pace|asides
+      - boundaries[]
+      - relationship        # to_user, nicknames[]
+      - entrances[]
+      - handoff_lines[]
+      - smalltalk[]
+      - goodbyes[]
+    defaults:
+      boundaries: ["no politics", "no medical or financial advice", "PG-13 only"]
+      relationship: { to_user: "their adult child" }
+  director_contract:
+    output_json_only: true
+    obey_scene_rules: true
+    handoff_plan: ["foreground_filler<=3s", "off-mic shout", "new entrance within 4–8s"]
+
+scenes:
+  default: "scenes/family_party.yaml"
+  schema:
+    scene_id: "string"
+    title: "string"
+    roomtone: "path to wav/mp3"
+    walla_beds: ["path", "path"]
+    intensity: "float 0..1"
+    characters:
+      foreground: ["id"]
+      nearby: ["id"]
+      background: ["id"]
+    rules:
+      must_hit_lines: [{ character: "id", line_hint: "string", within_seconds: "int" }]
+      handoff_triggers: [{ from: "id", to: "id", when_user_mentions: ["string"] }]
+    timing: { handoff_min_s: "int", handoff_max_s: "int" }
+    overlap: { max_ms: "int" }
+    ducking_db: "int"
+    tts: { voice_map: { any_id: "voice_name" } }
+    background_asides: [{ speaker: "id", lines: ["string"] }]
+    safety:
+      pg13: true
+      blocked_topics: ["string"]
+    stop_words: ["string"]
+
+audio_assets:
+  expected_files:
+    roomtone: "roomtone_livingroom.wav"
+    walla: "walla_family_casual_1.wav"
+    cutlery: "cutlery_clink_1.wav"
+    kids: "kids_scatter_1.wav"
+    aside_near: "aside_chair_scrape.wav"
+    aside_far: "aside_distant_chatter.wav"
+  guidelines:
+    format_priority: ["wav", "mp3"]
+    length_target_sec: [5, 120]   # loops can be long; oneshots 0.2–2.0s
+    normalizing: "-16 LUFS preferred; trim silence"
+    loop_points: "zero-crossing if possible"
+
+safety:
+  profanity_strategy: "soften common words; rephrase if necessary"
+  immediate_end_on_stop_word: true
+  logging:
+    redact_user_text: false
+    store_plans: false
+  rate_limits:
+    user_max_minutes: 10
+    back_to_back_calls_cooldown_s: 5
+
+intents:
+  patterns:
+    end_call: ["end call", "hang up", "goodbye", "bye"]
+    ask_brother: ["brother", "bro", "hand me to bro", "put him on", "can I talk to my brother"]
+    lower_bg: ["quiet", "too loud", "shh", "lower the background"]
+    greet_mom: ["mom", "mother", "ma", "hey mom"]
+  fallback: "smalltalk"
+
+orchestration_contract:
+  input:
+    - type: "user_transcript"
+      fields: { text: "string" }
+    - type: "set_bg_energy"
+      fields: { value: "float 0..1" }
+    - type: "end_call"
+      fields: {}
+  output:
+    - type: "hello"
+      fields: { scene_id: "string", title: "string" }
+    - type: "plan"
+      fields: { data: "plan_shape" }
+    - type: "ack"
+      fields: { ok: "bool" }
+
+dev_workflow:
+  steps:
+    - "Edit agents/_scaffold.yaml to add/modify personas."
+    - "Run scripts/make_agents.py (use --force to overwrite)."
+    - "Drop/verify SFX under app/frontend/assets/sfx/ matching audio_assets.expected_files."
+    - "Run backend: uvicorn app.backend.main:app --reload"
+    - "Serve frontend (http server) and open app/frontend/index.html"
+    - "Test handoff: ask for brother; confirm 4–8s handoff timing."
+    - "Verify that Mom ‘Are you eating ok?’ fires within 90s."
+    - "Check stop words end the call immediately."
+    - "Tune ducking & overlap if speech clarity suffers."
+  commit_message_convention:
+    - "scene: add uncle persona + chair scrape SFX"
+    - "orchestrator: tighten handoff window"
+    - "audio: adjust duck to -16 dB"
+
+testing_checklist:
+  functional:
+    - "Dial → Greeting → ForegroundTalk flows"
+    - "Handoff triggers on keywords"
+    - "Stop words terminate session"
+  audio:
+    - "BG loops run; ducking on TTS start; restore on end"
+    - "Asides play near/far at appropriate levels"
+  ux:
+    - "Active speaker highlight updates properly"
+    - "BG slider maps ~-24 dB .. -6 dB"
+  performance:
+    - "ASR→LLM→TTS latency target ≤ 2.0s"
+    - "No audio context lock issues (user gesture handled)"
+  safety:
+    - "Profanity softened; slurs blocked"
+    - "No real-person claims"
+
+environments:
+  local:
+    run_backend: "uvicorn app.backend.main:app --reload"
+    serve_frontend: "python -m http.server 8080"
+    url_frontend: "http://localhost:8080/app/frontend/index.html"
+    url_ws: "ws://localhost:8000/ws"
+
+observability:
+  console_logs:
+    frontend: true
+    backend: true
+  future:
+    trace_ids_in_plan: false
+    session_summary_on_end: true
+
+migration_notes:
+  adding_persona:
+    - "Update agents/_scaffold.yaml"
+    - "Run scripts/make_agents.py"
+    - "Map TTS voice in scenes/* (tts.voice_map)"
+  adding_scene:
+    - "Create scenes/<name>.yaml using scenes.schema"
+    - "Point backend loader to that file or expose a scene picker"
