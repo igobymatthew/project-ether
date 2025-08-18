@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # --- Application State ---
-app_state = {"tts_model": None}
+app_state = {"tts_model": None, "tts_ready": False, "websockets": set()}
 
 # --- TTS Model Loading ---
 def load_tts_model_sync():
@@ -33,6 +33,7 @@ def load_tts_model_sync():
     try:
         model = ChatterboxTTS.from_pretrained(device="cpu")
         app_state["tts_model"] = model
+        app_state["tts_ready"] = True
         logger.info("TTS model loaded successfully.")
     except Exception as e:
         logger.error(f"Could not load ChatterboxTTS model: {e}", exc_info=True)
@@ -41,6 +42,13 @@ async def load_tts_model_async():
     """Asynchronous wrapper to run the synchronous model loading in a thread pool."""
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, load_tts_model_sync)
+    if app_state["tts_ready"]:
+        logger.info(f"Broadcasting TTS ready status to {len(app_state['websockets'])} clients.")
+        tasks = [
+            ws.send_json({"type": "tts_status", "ready": True})
+            for ws in app_state["websockets"]
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 @app.on_event("startup")
 async def startup_event():
@@ -60,7 +68,11 @@ async def root():
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
     await ws.accept()
+    app_state["websockets"].add(ws)
+    logger.info(f"Client connected. Total clients: {len(app_state['websockets'])}")
     try:
+        # Send initial status first
+        await ws.send_json({"type": "tts_status", "ready": app_state["tts_ready"]})
         await ws.send_json({"type": "hello", "scene_id": state.scene_id, "title": state.title})
         while True:
             msg = await ws.receive_text()
@@ -80,4 +92,7 @@ async def ws(ws: WebSocket):
                 await ws.send_json({"type": "plan", "data": {"controls": {"end_call": True}}})
                 break
     except WebSocketDisconnect:
-        pass
+        logger.info("Client disconnected.")
+    finally:
+        app_state["websockets"].remove(ws)
+        logger.info(f"Client removed. Total clients: {len(app_state['websockets'])}")

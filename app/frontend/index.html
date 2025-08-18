@@ -190,6 +190,23 @@
 
   // ------------------ Existing UI + WS glue (updated) ------------------
   let ws, sceneTitle = "";
+  const sayInput = document.getElementById("say");
+  const sendButton = document.getElementById("send");
+
+  function setUiReady(ready) {
+    const isLoading = !ready;
+    sayInput.disabled = isLoading;
+    sendButton.disabled = isLoading;
+    if (isLoading) {
+      sayInput.placeholder = "Loading expressive voices, please wait...";
+    } else {
+      sayInput.placeholder = "Type what you say (e.g., “Hey Mom!”)";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setUiReady(false); // Initially disable UI until status is known
+  });
 
   function log(s){
     const el = document.getElementById("log");
@@ -235,6 +252,12 @@
     ws.onopen = () => log("[ws] connected");
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
+      if (msg.type === "tts_status") {
+        setUiReady(msg.ready);
+        if (msg.ready) {
+          log("[system] Expressive voices are ready.");
+        }
+      }
       if(msg.type === "hello"){ sceneTitle = msg.title; log("[scene] " + msg.title); }
       if(msg.type === "plan"){ handlePlan(msg.data); }
     };

@@ -87,7 +87,7 @@ flowchart LR
     source .venv/bin/activate   # Windows: .venv\Scripts\activate
     pip install -r requirements.txt
     ```
-    > **Note:** `requirements.txt` now includes `torch`, `torchaudio`, and `chatterbox-tts`, which are large libraries. The first time you run the backend, the Chatterbox model (~1GB) will be downloaded.
+    > **Note:** `requirements.txt` now includes `torch`, `torchaudio`, and `chatterbox-tts`, which are large libraries. The first time you run the backend, the Chatterbox model (~1GB) will be downloaded. **During this time, the frontend will show a "Loading expressive voices..." message and input will be disabled.** This is normal. Once the model is ready, the input will be enabled automatically.
 
 3.  **Generate agents/prompts**
     ```bash
