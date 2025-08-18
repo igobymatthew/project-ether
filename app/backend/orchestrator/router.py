@@ -2,11 +2,25 @@ from .state import SceneState
 from . import intents
 from .nlg import generate_character_line, pack_plan
 
+
 class Director:
     def __init__(self, state: SceneState, tts_model=None):
         self.state = state
         self.tts_model = tts_model
-        self._did_mom_eat_check = False # This logic can be removed or refactored if the LLM handles it.
+
+    def _find_handoff_target(self, user_text: str) -> str | None:
+        """Checks if the user's text triggers a handoff defined in the scene."""
+        s = self.state
+        if not hasattr(s, 'handoff_triggers') or not isinstance(s.handoff_triggers, list):
+            return None
+
+        for trigger in s.handoff_triggers:
+            if "from" in trigger and "to" in trigger and "when_user_mentions" in trigger:
+                if s.foreground == trigger["from"] and any(
+                    keyword.lower() in user_text.lower() for keyword in trigger["when_user_mentions"]
+                ):
+                    return trigger["to"]
+        return None
 
     def step(self, user_text: str):
         s = self.state
@@ -16,38 +30,32 @@ class Director:
         if intent == "end_call":
             return {"controls": {"end_call": True}}
 
-        # greet flow
-        if s.stage == "Greeting":
-            s.stage = "ForegroundTalk"
-            s.foreground = "mother"
-            # The first line is often scripted, but can also be dynamic.
-            # For now, we keep the original greeting for consistency.
-            line = "Oh honey! Glad you called—hang on—Jared, feet off—love you. Are you eating ok?"
-            self._did_mom_eat_check = "Are you eating ok?" in line
-            return pack_plan(s.foreground, line, tts_model=self.tts_model)
-
-        # handoff ask
-        if intent == "ask_brother" and s.foreground != "brother":
+        handoff_target = self._find_handoff_target(user_text)
+        if handoff_target and s.foreground != handoff_target:
             s.stage = "Handoff"
-            # The handoff line can also be generated dynamically or kept scripted.
-            # Let's keep it scripted for reliability.
-            handoff_line = "Just a sec, I’ll grab your brother. Love you—are you eating ok?"
+            handoff_prompt = f"The user wants to talk to {handoff_target}. Let them know you're getting them."
+            line = generate_character_line(s.foreground, handoff_prompt)
+
             current_speaker = s.foreground
-            s.foreground = "brother" # The state now anticipates the brother.
-            return pack_plan(current_speaker, handoff_line, handoff_to="brother", tts_model=self.tts_model)
+            s.foreground = handoff_target
 
-        # after handoff: new character speaks
-        if s.stage == "Handoff":
+            return pack_plan(
+                current_speaker,
+                line,
+                state=s,
+                handoff_to=handoff_target,
+                tts_model=self.tts_model
+            )
+
+        if s.stage in ["Greeting", "Handoff", "ForegroundTalk"]:
             s.stage = "ForegroundTalk"
-            # The new speaker generates a response to the original user text.
             line = generate_character_line(s.foreground, user_text)
-            return pack_plan(s.foreground, line, tts_model=self.tts_model)
+            return pack_plan(s.foreground, line, state=s, tts_model=self.tts_model)
 
-        # default foreground responses
-        if s.foreground in ["mother", "brother", "uncle", "kid"]: # Check against all possible speakers
-            # The main logic change: use the generic generator for any character.
-            line = generate_character_line(s.foreground, user_text)
-            return pack_plan(s.foreground, line, tts_model=self.tts_model)
-
-        # fallback
-        return pack_plan("mother", "We’re here! Can you hear us?", tts_model=self.tts_model)
+        # Fallback for any unexpected state.
+        return pack_plan(
+            s.foreground,
+            "We’re here! Can you hear us?",
+            state=s,
+            tts_model=self.tts_model
+        )

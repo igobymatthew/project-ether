@@ -1,10 +1,12 @@
 import json
 from pathlib import Path
+import random
 import torchaudio
 import uuid
 
 from app.backend.llm import llm_connector
 from .safety import sanitize
+from .state import SceneState
 
 # Directory for storing generated audio files, accessible by the frontend.
 AUDIO_DIR = Path("app/frontend/assets/gen-audio")
@@ -58,14 +60,37 @@ def generate_character_line(character_id: str, user_text: str) -> str:
     )
     return generated_line
 
-def aside_lines() -> list[dict]:
-    """Provides hardcoded background chatter for ambiance."""
-    return [
-        {"speaker": "uncle", "line": "(far) save me a plate!", "proximity": "far"},
-        {"speaker": "kid", "line": "Where’s the charger?", "proximity": "near"}
-    ]
+def aside_lines(state: SceneState) -> list[dict]:
+    """Pulls a random subset of background chatter from the current scene state."""
+    if not hasattr(state, 'background_asides') or not state.background_asides:
+        return []
 
-def pack_plan(fore_speaker: str, line: str, tts_model=None, handoff_to: str | None = None, duck_db=-14):
+    max_asides = min(len(state.background_asides), 2)
+    num_to_play = random.randint(0, max_asides)
+
+    if num_to_play == 0:
+        return []
+
+    all_possible_lines = []
+    for aside_group in state.background_asides:
+        speaker = aside_group.get("speaker")
+        if speaker:
+            for line in aside_group.get("lines", []):
+                all_possible_lines.append({"speaker": speaker, "line": line})
+
+    if not all_possible_lines:
+        return []
+
+    return random.sample(all_possible_lines, min(num_to_play, len(all_possible_lines)))
+
+
+def pack_plan(
+    fore_speaker: str,
+    line: str,
+    state: SceneState,
+    tts_model=None,
+    handoff_to: str | None = None
+):
     """
     Packages the generated line and other data into the final JSON plan
     that the frontend will execute. This includes generating the TTS audio.
@@ -74,23 +99,22 @@ def pack_plan(fore_speaker: str, line: str, tts_model=None, handoff_to: str | No
 
     if tts_model:
         try:
-            # Generate audio from the sanitized text line.
             wav = tts_model.generate(sanitized_line)
             filename = f"{uuid.uuid4()}.wav"
             filepath = AUDIO_DIR / filename
             torchaudio.save(filepath, wav, tts_model.sr)
-            # The line content becomes the URL to the audio file.
             line_content = f"assets/gen-audio/{filename}"
         except Exception as e:
             print(f"ERROR: TTS generation failed: {e}")
-            # Fallback to sending text if TTS fails.
             line_content = sanitized_line
     else:
-        # If no TTS model, just send the text.
         line_content = sanitized_line
+
+    duck_db = getattr(state, 'ducking_db', -14)
+    overlap_ms = getattr(state, 'overlap', {}).get('max_ms', 350)
 
     return {
         "foreground": {"speaker": fore_speaker, "line": line_content, "transcript": sanitized_line},
-        "background": aside_lines(),
-        "controls": {"ducking_db": duck_db, "overlap_ms": 350, "handoff_to": handoff_to or "none"}
+        "background": aside_lines(state),
+        "controls": {"ducking_db": duck_db, "overlap_ms": overlap_ms, "handoff_to": handoff_to or "none"}
     }
