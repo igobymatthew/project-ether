@@ -4,9 +4,9 @@ from .nlg import generate_character_line, pack_plan
 
 
 class Director:
-    def __init__(self, state: SceneState, tts_model=None):
+    def __init__(self, state: SceneState, tts_model_getter=None):
         self.state = state
-        self.tts_model = tts_model
+        self.tts_model_getter = tts_model_getter
 
     def _find_handoff_target(self, user_text: str) -> str | None:
         """Checks if the user's text triggers a handoff defined in the scene."""
@@ -39,23 +39,26 @@ class Director:
             current_speaker = s.foreground
             s.foreground = handoff_target
 
+            tts_model = self.tts_model_getter() if self.tts_model_getter else None
             return pack_plan(
                 current_speaker,
                 line,
                 state=s,
                 handoff_to=handoff_target,
-                tts_model=self.tts_model
+                tts_model=tts_model
             )
 
         if s.stage in ["Greeting", "Handoff", "ForegroundTalk"]:
             s.stage = "ForegroundTalk"
             line = generate_character_line(s.foreground, user_text)
-            return pack_plan(s.foreground, line, state=s, tts_model=self.tts_model)
+            tts_model = self.tts_model_getter() if self.tts_model_getter else None
+            return pack_plan(s.foreground, line, state=s, tts_model=tts_model)
 
         # Fallback for any unexpected state.
+        tts_model = self.tts_model_getter() if self.tts_model_getter else None
         return pack_plan(
             s.foreground,
             "We’re here! Can you hear us?",
             state=s,
-            tts_model=self.tts_model
+            tts_model=tts_model
         )

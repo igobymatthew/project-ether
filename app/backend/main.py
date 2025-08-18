@@ -10,18 +10,31 @@ import torchaudio
 
 app = FastAPI()
 
-# --- TTS Model ---
-# Load on startup, so it's ready for requests.
-# Using CPU for wider compatibility, but CUDA would be faster.
-try:
-    tts_model = ChatterboxTTS.from_pretrained(device="cpu")
-except Exception as e:
-    print(f"WARN: Could not load ChatterboxTTS model: {e}")
-    tts_model = None
+import threading
+
+# --- Application State ---
+# Using a simple dict for state, including the TTS model.
+# This makes it easier to manage and pass around.
+app_state = {"tts_model": None}
+
+# --- TTS Model Loading ---
+def load_tts_model():
+    """Loads the TTS model and stores it in the app_state."""
+    print("Loading TTS model in background...")
+    try:
+        model = ChatterboxTTS.from_pretrained(device="cpu")
+        app_state["tts_model"] = model
+        print("TTS model loaded successfully.")
+    except Exception as e:
+        print(f"WARN: Could not load ChatterboxTTS model: {e}")
+
+# Start loading the model in a background thread.
+tts_thread = threading.Thread(target=load_tts_model)
+tts_thread.start()
 
 scene_path = Path("scenes/family_party.yaml")
 state = SceneState.from_yaml(scene_path)
-director = Director(state, tts_model=tts_model)
+director = Director(state, tts_model_getter=lambda: app_state["tts_model"])
 
 @app.get("/")
 async def root():
