@@ -1,0 +1,24 @@
+# LLM Provider Configuration
+#
+# Sets the active LLM provider for the application.
+# Supported providers: "lm-studio", "google-gemini"
+active_provider: "lm-studio"
+
+providers:
+  # Configuration for LM Studio, which uses an OpenAI-compatible API.
+  lm-studio:
+    # The local server address for LM Studio.
+    base_url: "http://localhost:1234/v1"
+    # The API key can often be a placeholder for local models.
+    api_key: "not-needed"
+    # It's good practice to define a default model, even if the server has one.
+    model: "local-model" # Or specify the model you have loaded in LM Studio
+
+  # Configuration for Google Gemini.
+  google-gemini:
+    # For security, it's best to load the API key from an environment variable.
+    # The application code will be written to look for GOOGLE_API_KEY.
+    # You can paste your key here for testing, but it's not recommended.
+    api_key: "YOUR_GEMINI_API_KEY_HERE"
+    # Specify the Gemini model to use.
+    model: "gemini-1.5-flash"
