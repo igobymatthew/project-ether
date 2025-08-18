@@ -7,30 +7,47 @@ from .orchestrator.router import Director
 from chatterbox.tts import ChatterboxTTS
 import torch
 import torchaudio
+import asyncio
+import logging
+
+# --- Logging Setup ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("tts_loader.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-import threading
-
 # --- Application State ---
-# Using a simple dict for state, including the TTS model.
-# This makes it easier to manage and pass around.
 app_state = {"tts_model": None}
 
 # --- TTS Model Loading ---
-def load_tts_model():
-    """Loads the TTS model and stores it in the app_state."""
-    print("Loading TTS model in background...")
+def load_tts_model_sync():
+    """Synchronous function to load the TTS model."""
+    logger.info("Loading TTS model in background...")
     try:
         model = ChatterboxTTS.from_pretrained(device="cpu")
         app_state["tts_model"] = model
-        print("TTS model loaded successfully.")
+        logger.info("TTS model loaded successfully.")
     except Exception as e:
-        print(f"WARN: Could not load ChatterboxTTS model: {e}")
+        logger.error(f"Could not load ChatterboxTTS model: {e}", exc_info=True)
 
-# Start loading the model in a background thread.
-tts_thread = threading.Thread(target=load_tts_model)
-tts_thread.start()
+async def load_tts_model_async():
+    """Asynchronous wrapper to run the synchronous model loading in a thread pool."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, load_tts_model_sync)
+
+@app.on_event("startup")
+async def startup_event():
+    """On startup, kick off the model loading in the background."""
+    logger.info("Application startup...")
+    asyncio.create_task(load_tts_model_async())
+
 
 scene_path = Path("scenes/family_party.yaml")
 state = SceneState.from_yaml(scene_path)
