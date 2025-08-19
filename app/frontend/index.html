@@ -40,6 +40,92 @@
   </div>
 
 <script>
+  // ------------------ Microphone Streaming ------------------
+  class MicrophoneStreamer {
+    constructor(ws, onStop) {
+      this.ws = ws;
+      this.onStop = onStop;
+      this.mediaStream = null;
+      this.audioCtx = null;
+      this.scriptProcessor = null;
+      this.source = null;
+      this.targetSampleRate = 16000; // Whisper needs 16kHz
+    }
+
+    async start() {
+      try {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        this.scriptProcessor = this.audioCtx.createScriptProcessor(4096, 1, 1);
+        this.scriptProcessor.onaudioprocess = this._handleAudioProcess.bind(this);
+
+        this.source = this.audioCtx.createMediaStreamSource(this.mediaStream);
+        this.source.connect(this.scriptProcessor);
+        this.scriptProcessor.connect(this.audioCtx.destination); // Connect to output to avoid garbage collection
+
+        log("[mic] Microphone access granted, streaming started.");
+      } catch (e) {
+        log("[mic] Error getting microphone access: " + e);
+        this.stop();
+      }
+    }
+
+    stop() {
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(track => track.stop());
+      }
+      if (this.scriptProcessor) {
+        this.scriptProcessor.disconnect();
+      }
+      if (this.audioCtx) {
+        this.audioCtx.close();
+      }
+      log("[mic] Microphone streaming stopped.");
+      if (this.onStop) this.onStop();
+    }
+
+    _handleAudioProcess(event) {
+      const inputData = event.inputBuffer.getChannelData(0);
+      const resampledData = this._resample(inputData, this.audioCtx.sampleRate, this.targetSampleRate);
+      const pcmData = this._floatTo16BitPCM(resampledData);
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(pcmData.buffer);
+      }
+    }
+
+    _resample(data, from, to) {
+        if (from === to) return data;
+        const ratio = from / to;
+        const newLength = Math.round(data.length / ratio);
+        const result = new Float32Array(newLength);
+        let offsetResult = 0;
+        let offsetBuffer = 0;
+        while (offsetResult < result.length) {
+            const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+            let accum = 0, count = 0;
+            for (let i = offsetBuffer; i < nextOffsetBuffer && i < data.length; i++) {
+                accum += data[i];
+                count++;
+            }
+            result[offsetResult] = accum / count;
+            offsetResult++;
+            offsetBuffer = nextOffsetBuffer;
+        }
+        return result;
+    }
+
+    _floatTo16BitPCM(input) {
+      const output = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return output;
+    }
+  }
+
+
   // ------------------ Audio Engine (WebAudio) ------------------
   class AudioEngine {
     constructor() {
@@ -158,6 +244,21 @@
       }
     }
 
+    playChunk(pcmData) {
+        if (!this.ctx) return;
+        const floatData = new Float32Array(pcmData.length);
+        for (let i = 0; i < pcmData.length; i++) {
+            floatData[i] = pcmData[i] / 32768.0;
+        }
+
+        const buffer = this.ctx.createBuffer(1, floatData.length, this.ctx.sampleRate);
+        buffer.copyToChannel(floatData, 0);
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.master);
+        source.start();
+    }
   }
 
   // Singleton
@@ -188,24 +289,48 @@
     synth.speak(ut);
   }
 
-  // ------------------ Existing UI + WS glue (updated) ------------------
+  // ------------------ UI + WS glue (Refactored for Audio Streaming) ------------------
   let ws, sceneTitle = "";
   const sayInput = document.getElementById("say");
   const sendButton = document.getElementById("send");
+  const dialButton = document.getElementById("dial");
+  const endButton = document.getElementById("end");
 
-  function setUiReady(ready) {
-    const isLoading = !ready;
-    sayInput.disabled = isLoading;
-    sendButton.disabled = isLoading;
-    if (isLoading) {
+  // App state
+  const AppState = {
+    isCallActive: false,
+    isTtsReady: false,
+    isPushToTalk: false,
+  };
+
+  function renderUI() {
+    // Renders UI based on AppState
+    if (!AppState.isTtsReady) {
+      dialButton.disabled = true;
+      dialButton.textContent = "Loading...";
+      sayInput.disabled = true;
+      sendButton.disabled = true;
+      endButton.disabled = true;
       sayInput.placeholder = "Loading expressive voices, please wait...";
+    } else if (AppState.isCallActive) {
+      dialButton.disabled = false;
+      dialButton.textContent = AppState.isPushToTalk ? "Release to Send" : "Hold to Talk";
+      sayInput.disabled = true;
+      sendButton.disabled = true;
+      endButton.disabled = false;
+      sayInput.placeholder = "Audio call is active.";
     } else {
-      sayInput.placeholder = "Type what you say (e.g., “Hey Mom!”)";
+      dialButton.disabled = false;
+      dialButton.textContent = "Dial";
+      sayInput.disabled = true; // Text input is disabled in audio mode
+      sendButton.disabled = true;
+      endButton.disabled = true;
+      sayInput.placeholder = "Press Dial to start audio call";
     }
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    setUiReady(false); // Initially disable UI until status is known
+    renderUI(); // Initial render
   });
 
   function log(s){
@@ -246,45 +371,92 @@
   }
 
   // Wire up controls
-  document.getElementById("dial").onclick = async () => {
-    await AE.start(); // user gesture unlocks audio
-    ws = new WebSocket("ws://localhost:8000/ws");
-    ws.onopen = () => log("[ws] connected");
-    ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === "tts_status") {
-        setUiReady(msg.ready);
-        if (msg.ready) {
-          log("[system] Expressive voices are ready.");
-        }
-      }
-      if(msg.type === "hello"){ sceneTitle = msg.title; log("[scene] " + msg.title); }
-      if(msg.type === "plan"){ handlePlan(msg.data); }
+  let micStreamer = null;
+
+  function endCall() {
+    if(ws) {
+      ws.close();
+      ws = null;
+    }
+    if (micStreamer) {
+      micStreamer.stop();
+      micStreamer = null;
+    }
+    AppState.isCallActive = false;
+    AppState.isPushToTalk = false;
+    renderUI();
+    log("[system] Call ended.");
+  }
+
+  dialButton.onmousedown = async () => {
+    if (!AppState.isCallActive || AppState.isPushToTalk) return;
+    AppState.isPushToTalk = true;
+    renderUI();
+    micStreamer = new MicrophoneStreamer(ws, () => {
+      // This onStop callback is useful if the mic is stopped from another source
+      AppState.isPushToTalk = false;
+      renderUI();
+    });
+    await micStreamer.start();
+  };
+
+  dialButton.onmouseup = () => {
+    if (!AppState.isPushToTalk) return;
+    if (micStreamer) micStreamer.stop();
+    // The onStop callback on the streamer will set isPushToTalk to false and re-render
+  };
+
+  dialButton.onclick = async () => {
+    if (AppState.isCallActive) return;
+
+    // --- Start the audio call ---
+    await AE.start();
+    log("[system] Starting audio call...");
+
+    ws = new WebSocket("ws://localhost:8000/ws-audio");
+    ws.binaryType = "arraybuffer";
+
+    ws.onopen = () => {
+      log("[ws-audio] connected");
+      AppState.isCallActive = true;
+      renderUI();
     };
-    ws.onclose = () => log("[ws] closed");
+
+    ws.onmessage = (ev) => {
+      // When we receive audio, we duck the background audio, play the chunk, and then unduck
+      AE.duck();
+      const audioChunk = new Int16Array(ev.data);
+      AE.playChunk(audioChunk);
+      AE.unduck(); // This might be too quick, consider a more sophisticated approach if needed
+    };
+
+    ws.onclose = () => {
+      log("[ws-audio] closed");
+      endCall(); // Use the centralized endCall function
+    };
+
+    ws.onerror = (err) => {
+      log("[ws-audio] error: " + err);
+      endCall();
+    }
   };
 
-  document.getElementById("send").onclick = () => {
-    const text = document.getElementById("say").value.trim();
-    if(!text || !ws) return;
-    ws.send(JSON.stringify({type:"user_transcript", text}));
-    log("you: " + text);
-    document.getElementById("say").value = "";
-  };
+  function setUiReady(ready) {
+    AppState.isTtsReady = ready;
+    renderUI();
+  }
 
-  document.getElementById("askBro").onclick = () => {
-    if(!ws) return;
-    ws.send(JSON.stringify({type:"user_transcript", text:"can I talk to my brother?"}));
-    log('you: can I talk to my brother?');
-  };
+  // Text-based controls are disabled for this audio-only demo
+  document.getElementById("send").onclick = () => {};
+  document.getElementById("askBro").onclick = () => {};
 
-  document.getElementById("end").onclick = () => {
-    if(ws){ ws.send(JSON.stringify({type:"end_call"})); ws.close(); }
+  endButton.onclick = () => {
+    endCall();
   };
 
   document.getElementById("bg").oninput = (e) => {
     AE.setBgEnergy(parseFloat(e.target.value || "0.6"));
-    if(ws){ ws.send(JSON.stringify({type:"set_bg_energy", value: e.target.value})); }
+    // Note: We are not sending this to the backend in the audio-only setup
   };
 </script>
 
