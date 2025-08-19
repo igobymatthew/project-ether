@@ -294,6 +294,7 @@
   const sayInput = document.getElementById("say");
   const sendButton = document.getElementById("send");
   const dialButton = document.getElementById("dial");
+  const endButton = document.getElementById("end");
 
   // App state
   const AppState = {
@@ -309,19 +310,22 @@
       dialButton.textContent = "Loading...";
       sayInput.disabled = true;
       sendButton.disabled = true;
+      endButton.disabled = true;
       sayInput.placeholder = "Loading expressive voices, please wait...";
     } else if (AppState.isCallActive) {
       dialButton.disabled = false;
       dialButton.textContent = AppState.isPushToTalk ? "Release to Send" : "Hold to Talk";
       sayInput.disabled = true;
       sendButton.disabled = true;
+      endButton.disabled = false;
       sayInput.placeholder = "Audio call is active.";
     } else {
       dialButton.disabled = false;
-      dialButton.textContent = "Dial (Audio)";
-      sayInput.disabled = false;
-      sendButton.disabled = false;
-      sayInput.placeholder = "Type what you say (e.g., “Hey Mom!”)";
+      dialButton.textContent = "Dial";
+      sayInput.disabled = true; // Text input is disabled in audio mode
+      sendButton.disabled = true;
+      endButton.disabled = true;
+      sayInput.placeholder = "Press Dial to start audio call";
     }
   }
 
@@ -369,11 +373,27 @@
   // Wire up controls
   let micStreamer = null;
 
+  function endCall() {
+    if(ws) {
+      ws.close();
+      ws = null;
+    }
+    if (micStreamer) {
+      micStreamer.stop();
+      micStreamer = null;
+    }
+    AppState.isCallActive = false;
+    AppState.isPushToTalk = false;
+    renderUI();
+    log("[system] Call ended.");
+  }
+
   dialButton.onmousedown = async () => {
     if (!AppState.isCallActive || AppState.isPushToTalk) return;
     AppState.isPushToTalk = true;
     renderUI();
     micStreamer = new MicrophoneStreamer(ws, () => {
+      // This onStop callback is useful if the mic is stopped from another source
       AppState.isPushToTalk = false;
       renderUI();
     });
@@ -383,10 +403,11 @@
   dialButton.onmouseup = () => {
     if (!AppState.isPushToTalk) return;
     if (micStreamer) micStreamer.stop();
+    // The onStop callback on the streamer will set isPushToTalk to false and re-render
   };
 
   dialButton.onclick = async () => {
-    if (AppState.isCallActive) return; // PTT handled by mousedown/up
+    if (AppState.isCallActive) return;
 
     // --- Start the audio call ---
     await AE.start();
@@ -402,17 +423,22 @@
     };
 
     ws.onmessage = (ev) => {
+      // When we receive audio, we duck the background audio, play the chunk, and then unduck
+      AE.duck();
       const audioChunk = new Int16Array(ev.data);
       AE.playChunk(audioChunk);
+      AE.unduck(); // This might be too quick, consider a more sophisticated approach if needed
     };
 
     ws.onclose = () => {
       log("[ws-audio] closed");
-      AppState.isCallActive = false;
-      AppState.isPushToTalk = false;
-      if (micStreamer) micStreamer.stop();
-      renderUI();
+      endCall(); // Use the centralized endCall function
     };
+
+    ws.onerror = (err) => {
+      log("[ws-audio] error: " + err);
+      endCall();
+    }
   };
 
   function setUiReady(ready) {
@@ -420,27 +446,17 @@
     renderUI();
   }
 
-  document.getElementById("send").onclick = () => {
-    const text = document.getElementById("say").value.trim();
-    if(!text || !ws) return;
-    ws.send(JSON.stringify({type:"user_transcript", text}));
-    log("you: " + text);
-    document.getElementById("say").value = "";
-  };
+  // Text-based controls are disabled for this audio-only demo
+  document.getElementById("send").onclick = () => {};
+  document.getElementById("askBro").onclick = () => {};
 
-  document.getElementById("askBro").onclick = () => {
-    if(!ws) return;
-    ws.send(JSON.stringify({type:"user_transcript", text:"can I talk to my brother?"}));
-    log('you: can I talk to my brother?');
-  };
-
-  document.getElementById("end").onclick = () => {
-    if(ws){ ws.send(JSON.stringify({type:"end_call"})); ws.close(); }
+  endButton.onclick = () => {
+    endCall();
   };
 
   document.getElementById("bg").oninput = (e) => {
     AE.setBgEnergy(parseFloat(e.target.value || "0.6"));
-    if(ws){ ws.send(JSON.stringify({type:"set_bg_energy", value: e.target.value})); }
+    // Note: We are not sending this to the backend in the audio-only setup
   };
 </script>
 
