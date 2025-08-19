@@ -1,12 +1,12 @@
-# Project Ether (AudioLLMParty)
+# Project Ether
 
 An experimental audio-LLM playground for simulating lively group calls with background chatter, family archetypes, and real-time audio mixing, now featuring expressive voices powered by **Chatterbox TTS**.
 
-![Project Ether (AudioLLMParty) Preview](docs/preview.svg)
+![Project Ether Preview](docs/preview.svg)
 
 🎯 Overview
 
-Project Ether (aka AudioLLMParty) is a simulation of a “FaceTime-style” family/group call. When you dial in, you’re greeted by fictional archetypes (like Mom, Brother, Uncle, etc.), with:
+Project Ether is a simulation of a family/group call. When you dial in, you’re greeted by fictional archetypes (like Mom, Brother, Uncle, etc.), with:
 
 - **Expressive, natural voices** via Chatterbox TTS
 - Foreground voices that talk naturally (with background audio ducking)
