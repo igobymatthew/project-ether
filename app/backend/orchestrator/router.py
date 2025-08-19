@@ -1,12 +1,31 @@
 from .state import SceneState
 from . import intents
 from .nlg import generate_character_line, pack_plan
+from . import agent_builder
+import json
+from pathlib import Path
 
 
 class Director:
     def __init__(self, state: SceneState, tts_model_getter=None):
         self.state = state
         self.tts_model_getter = tts_model_getter
+
+    def _create_agent(self, agent_id: str, vibe: str):
+        """Creates a new agent and adds it to the scene."""
+        persona = agent_builder.build_persona_from_vibe(agent_id, vibe)
+
+        # Save the persona to a file
+        agents_dir = Path("agents")
+        agents_dir.mkdir(exist_ok=True)
+        persona_path = agents_dir / f"{agent_id}.json"
+        with persona_path.open("w", encoding="utf-8") as f:
+            json.dump(persona, f, ensure_ascii=False, indent=2)
+
+        # Add the agent to the scene
+        if "background" not in self.state.characters:
+            self.state.characters["background"] = []
+        self.state.characters["background"].append(agent_id)
 
     def _find_handoff_target(self, user_text: str) -> str | None:
         """Checks if the user's text triggers a handoff defined in the scene."""
@@ -29,6 +48,35 @@ class Director:
         intent = intents.classify(user_text)
         if intent == "end_call":
             return {"controls": {"end_call": True}}
+
+        if intent == "create_agent":
+            match = intents.CREATE_AGENT.search(user_text)
+            if match:
+                # Extract agent name and vibe
+                agent_id = match.group(2).lower()
+                vibe = user_text[match.end(0) :].strip()
+
+                # Check if agent exists
+                persona_path = Path(f"agents/{agent_id}.json")
+                if not persona_path.exists():
+                    self._create_agent(agent_id, vibe)
+
+                # Handoff to the new or existing agent
+                s.stage = "Handoff"
+                handoff_prompt = f"The user wants to talk to {agent_id}. Let them know you're getting them."
+                line = generate_character_line(s.foreground, handoff_prompt)
+
+                current_speaker = s.foreground
+                s.foreground = agent_id
+
+                tts_model = self.tts_model_getter() if self.tts_model_getter else None
+                return pack_plan(
+                    current_speaker,
+                    line,
+                    state=s,
+                    handoff_to=agent_id,
+                    tts_model=tts_model,
+                )
 
         handoff_target = self._find_handoff_target(user_text)
         if handoff_target and s.foreground != handoff_target:
