@@ -1,10 +1,9 @@
 import asyncio
-from genai_processors import बड़ीसोच, Processor
+from genai_processors import Processor
 import whisper
-import torch
 import numpy as np
-from app.backend.llm.lm_studio import LMStudio
-from chatterbox_tts import ChatterboxTTS
+import httpx
+from app.api.main.llm.lm_studio import LMStudio
 
 class LocalSTTProcessor(Processor):
     """
@@ -58,23 +57,28 @@ class LocalLLMProcessor(Processor):
 
 class LocalTTSProcessor(Processor):
     """
-    A processor that uses ChatterboxTTS to convert text to speech audio stream.
+    A processor that calls a remote TTS service to convert text to speech.
     """
-    def __init__(self, tts_model: ChatterboxTTS):
+    def __init__(self, tts_service_url="http://localhost:8001/synthesize"):
         super().__init__()
-        self.tts_model = tts_model
+        self.tts_service_url = tts_service_url
+        self.client = httpx.AsyncClient()
 
     async def call(self, *args, **kwargs):
         text_chunk = args[0]
         if text_chunk:
-            # Generate audio waveform from text
-            wav = self.tts_model.generate_stream(text_chunk)
-            if wav is not None:
-                # The output from chatterbox is a tensor, convert to bytes
-                audio_bytes = self.wav_to_bytes(wav)
-                await self.output.put(audio_bytes)
-
-    def wav_to_bytes(self, wav_tensor):
-        # Assuming the waveform is mono
-        wav_tensor = (wav_tensor * 32767).to(torch.int16)
-        return wav_tensor.cpu().numpy().tobytes()
+            try:
+                response = await self.client.post(
+                    self.tts_service_url,
+                    json={"text": text_chunk},
+                    timeout=20.0 # Set a timeout
+                )
+                response.raise_for_status()  # Raise an exception for bad status codes
+                audio_bytes = response.content
+                if audio_bytes:
+                    await self.output.put(audio_bytes)
+            except httpx.RequestError as e:
+                # Handle connection errors, timeouts, etc.
+                print(f"An error occurred while requesting {e.request.url!r}: {e}")
+            except Exception as e:
+                print(f"An unexpected error occurred in LocalTTSProcessor: {e}")
