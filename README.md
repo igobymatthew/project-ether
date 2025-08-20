@@ -19,7 +19,7 @@ Project Ether simulates a group call with fictional characters.
     cd project-ether
     ```
 
-2.  **Set up the Python environment**
+2.  **Set up the Python environment for the main app**
     ```bash
     python -m venv .venv
     source .venv/bin/activate   # On Windows, use: .venv\Scripts\activate
@@ -27,19 +27,33 @@ Project Ether simulates a group call with fictional characters.
     ```
     *Note: The required packages include large libraries for audio processing. The first time you run the backend, a model of about 1GB will be downloaded. The application will be ready to use once the download is complete.*
 
-3.  **Generate character agents**
+3.  **Set up the Python environment for the TTS service**
+    In a new terminal:
+    ```bash
+    python -m venv .venv-tts
+    source .venv-tts/bin/activate   # On Windows, use: .venv-tts\Scripts\activate
+    pip install -r services/tts/requirements.txt
+    ```
+
+4.  **Generate character agents**
     ```bash
     python scripts/make_agents.py
     ```
 
-4.  **Run the backend server**
+5.  **Run the TTS service**
+    In the terminal with the `.venv-tts` environment activated:
+    ```bash
+    gunicorn --workers 1 --bind 0.0.0.0:8081 services.tts.main:app
+    ```
+
+6.  **Run the backend server**
+    In the terminal with the `.venv` environment activated:
     ```bash
     uvicorn app.backend.main:app --reload --port 8000
     ```
     You can check if the backend is running by visiting `http://localhost:8000/`.
 
-5.  **Run the frontend**
-
+7.  **Run the frontend**
     In a new terminal, run the following command:
     ```bash
     python -m http.server --directory app/frontend 8080

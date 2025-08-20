@@ -1,10 +1,27 @@
 import asyncio
 from genai_processors import बड़ीसोच, Processor
 import whisper
-import torch
 import numpy as np
 from app.backend.llm.lm_studio import LMStudio
-from chatterbox_tts import ChatterboxTTS
+import requests
+
+class LocalTTSProcessor(Processor):
+    """
+    A processor that calls a local TTS service to convert text to speech.
+    """
+    def __init__(self, tts_url="http://localhost:8081/tts"):
+        super().__init__()
+        self.tts_url = tts_url
+
+    async def call(self, *args, **kwargs):
+        text_chunk = args[0]
+        if text_chunk:
+            try:
+                response = requests.post(self.tts_url, json={"text": text_chunk})
+                response.raise_for_status()
+                await self.output.put(response.content)
+            except requests.exceptions.RequestException as e:
+                print(f"ERROR: TTS request failed: {e}")
 
 class LocalSTTProcessor(Processor):
     """
@@ -56,25 +73,3 @@ class LocalLLMProcessor(Processor):
                 await self.output.put(content)
 
 
-class LocalTTSProcessor(Processor):
-    """
-    A processor that uses ChatterboxTTS to convert text to speech audio stream.
-    """
-    def __init__(self, tts_model: ChatterboxTTS):
-        super().__init__()
-        self.tts_model = tts_model
-
-    async def call(self, *args, **kwargs):
-        text_chunk = args[0]
-        if text_chunk:
-            # Generate audio waveform from text
-            wav = self.tts_model.generate_stream(text_chunk)
-            if wav is not None:
-                # The output from chatterbox is a tensor, convert to bytes
-                audio_bytes = self.wav_to_bytes(wav)
-                await self.output.put(audio_bytes)
-
-    def wav_to_bytes(self, wav_tensor):
-        # Assuming the waveform is mono
-        wav_tensor = (wav_tensor * 32767).to(torch.int16)
-        return wav_tensor.cpu().numpy().tobytes()

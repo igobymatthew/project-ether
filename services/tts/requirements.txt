@@ -1,0 +1,4 @@
+chatterbox-tts
+numpy==1.26.0
+Flask
+gunicorn

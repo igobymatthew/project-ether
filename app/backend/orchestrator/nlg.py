@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 import random
-import torchaudio
 import uuid
 
 from app.backend.llm import llm_connector
@@ -84,11 +83,12 @@ def aside_lines(state: SceneState) -> list[dict]:
     return random.sample(all_possible_lines, min(num_to_play, len(all_possible_lines)))
 
 
+import requests
+
 def pack_plan(
     fore_speaker: str,
     line: str,
     state: SceneState,
-    tts_model=None,
     handoff_to: str | None = None
 ):
     """
@@ -97,17 +97,18 @@ def pack_plan(
     """
     sanitized_line = sanitize(line)
 
-    if tts_model:
-        try:
-            wav = tts_model.generate(sanitized_line)
-            filename = f"{uuid.uuid4()}.wav"
-            filepath = AUDIO_DIR / filename
-            torchaudio.save(filepath, wav, tts_model.sr)
-            line_content = f"assets/gen-audio/{filename}"
-        except Exception as e:
-            print(f"ERROR: TTS generation failed: {e}")
-            line_content = sanitized_line
-    else:
+    try:
+        response = requests.post("http://localhost:8081/tts", json={"text": sanitized_line})
+        response.raise_for_status()  # Raise an exception for bad status codes
+
+        filename = f"{uuid.uuid4()}.wav"
+        filepath = AUDIO_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(response.content)
+
+        line_content = f"assets/gen-audio/{filename}"
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: TTS request failed: {e}")
         line_content = sanitized_line
 
     duck_db = getattr(state, 'ducking_db', -14)

@@ -7,9 +7,8 @@ from pathlib import Path
 
 
 class Director:
-    def __init__(self, state: SceneState, tts_model_getter=None):
+    def __init__(self, state: SceneState):
         self.state = state
-        self.tts_model_getter = tts_model_getter
 
     def _create_agent(self, agent_id: str, vibe: str):
         """Creates a new agent and adds it to the scene."""
@@ -69,13 +68,11 @@ class Director:
                 current_speaker = s.foreground
                 s.foreground = agent_id
 
-                tts_model = self.tts_model_getter() if self.tts_model_getter else None
                 return pack_plan(
                     current_speaker,
                     line,
                     state=s,
                     handoff_to=agent_id,
-                    tts_model=tts_model,
                 )
 
         handoff_target = self._find_handoff_target(user_text)
@@ -87,26 +84,21 @@ class Director:
             current_speaker = s.foreground
             s.foreground = handoff_target
 
-            tts_model = self.tts_model_getter() if self.tts_model_getter else None
             return pack_plan(
                 current_speaker,
                 line,
                 state=s,
                 handoff_to=handoff_target,
-                tts_model=tts_model
             )
 
         if s.stage in ["Greeting", "Handoff", "ForegroundTalk"]:
             s.stage = "ForegroundTalk"
             line = generate_character_line(s.foreground, user_text)
-            tts_model = self.tts_model_getter() if self.tts_model_getter else None
-            return pack_plan(s.foreground, line, state=s, tts_model=tts_model)
+            return pack_plan(s.foreground, line, state=s)
 
         # Fallback for any unexpected state.
-        tts_model = self.tts_model_getter() if self.tts_model_getter else None
         return pack_plan(
             s.foreground,
             "We’re here! Can you hear us?",
             state=s,
-            tts_model=tts_model
         )
