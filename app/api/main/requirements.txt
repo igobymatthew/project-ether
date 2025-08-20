@@ -2,9 +2,7 @@ fastapi==0.112.2
 uvicorn[standard]==0.30.6
 pydantic==2.9.0
 PyYAML==6.0.2
-chatterbox-tts
-torch
-torchaudio
+numpy>=2.0.0
 # Added for local audio pipeline
 genai-processors==0.0.3
 openai-whisper==20231117

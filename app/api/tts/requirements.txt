@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+chatterbox-tts
+numpy==1.26.4
+torch
+torchaudio

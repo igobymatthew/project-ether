@@ -2,17 +2,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pathlib import Path
 import json
-from .orchestrator.state import SceneState
-from .orchestrator.router import Director
-from .orchestrator.local_processors import (
+from app.api.main.orchestrator.state import SceneState
+from app.api.main.orchestrator.router import Director
+from app.api.main.orchestrator.local_processors import (
     LocalSTTProcessor,
     LocalLLMProcessor,
     LocalTTSProcessor,
 )
-from chatterbox_tts import ChatterboxTTS
 from genai_processors import Pipeline
-import torch
-import torchaudio
 import asyncio
 import logging
 import whisper
@@ -22,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("tts_loader.log"),
+        logging.FileHandler("main_backend.log"),
         logging.StreamHandler()
     ]
 )
@@ -32,8 +29,6 @@ app = FastAPI()
 
 # --- Application State ---
 app_state = {
-    "tts_model": None,
-    "tts_ready": False,
     "whisper_model": None,
     "websockets": set(),
 }
@@ -42,15 +37,6 @@ app_state = {
 # --- Model Loading ---
 def load_models_sync():
     """Synchronous function to load all models."""
-    # Load TTS
-    logger.info("Loading TTS model...")
-    try:
-        app_state["tts_model"] = ChatterboxTTS.from_pretrained(device="cpu")
-        app_state["tts_ready"] = True
-        logger.info("TTS model loaded successfully.")
-    except Exception as e:
-        logger.error(f"Could not load ChatterboxTTS model: {e}", exc_info=True)
-
     # Load Whisper
     logger.info("Loading Whisper model...")
     try:
@@ -66,14 +52,6 @@ async def load_models_async():
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, load_models_sync)
 
-    if app_state["tts_ready"]:
-        logger.info(f"Broadcasting TTS ready status to {len(app_state['websockets'])} clients.")
-        tasks = [
-            ws.send_json({"type": "tts_status", "ready": True})
-            for ws in app_state["websockets"]
-        ]
-        await asyncio.gather(*tasks, return_exceptions=True)
-
 
 @app.on_event("startup")
 async def startup_event():
@@ -84,7 +62,7 @@ async def startup_event():
 
 scene_path = Path("scenes/family_party.yaml")
 state = SceneState.from_yaml(scene_path)
-director = Director(state, tts_model_getter=lambda: app_state["tts_model"])
+director = Director(state)
 
 @app.get("/")
 async def root():
@@ -96,8 +74,6 @@ async def ws(ws: WebSocket):
     app_state["websockets"].add(ws)
     logger.info(f"Client connected. Total clients: {len(app_state['websockets'])}")
     try:
-        # Send initial status first
-        await ws.send_json({"type": "tts_status", "ready": app_state["tts_ready"]})
         await ws.send_json({"type": "hello", "scene_id": state.scene_id, "title": state.title})
         while True:
             msg = await ws.receive_text()
@@ -132,7 +108,7 @@ async def ws_audio(ws: WebSocket):
     # 1. Create processor instances
     stt_proc = LocalSTTProcessor(app_state["whisper_model"])
     llm_proc = LocalLLMProcessor()
-    tts_proc = LocalTTSProcessor(app_state["tts_model"])
+    tts_proc = LocalTTSProcessor()
 
     # 2. Define the pipeline
     pipeline = Pipeline(
