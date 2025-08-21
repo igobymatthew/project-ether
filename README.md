@@ -13,38 +13,61 @@ Project Ether simulates a group call with fictional characters.
 
 ## How to Run
 
-1.  **Clone the repository**
+This project consists of three main components: a **main API backend**, a **Text-to-Speech (TTS) service**, and a **frontend**. Due to conflicting Python dependencies between the two backend services, they must be run in separate environments.
+
+### 1. Generate Character Agents
+
+First, generate the agent configuration files needed for the simulation:
+```bash
+python scripts/make_agents.py
+```
+
+### 2. Run the Backend Services
+
+You will need two separate terminals for the backend services.
+
+**Terminal 1: Main API**
+
+1.  **Set up the environment:**
     ```bash
-    git clone https://github.com/yourusername/project-ether.git
-    cd project-ether
+    python -m venv .venv-main
+    source .venv-main/bin/activate   # On Windows: .venv-main\Scripts\activate
+    pip install -r app/api/main/requirements.txt
     ```
 
-2.  **Set up the Python environment**
+2.  **Run the server:**
     ```bash
-    python -m venv .venv
-    source .venv/bin/activate   # On Windows, use: .venv\Scripts\activate
-    pip install -r requirements.txt
+    uvicorn app.api.main.main:app --reload --port 8000
     ```
-    *Note: The required packages include large libraries for audio processing. The first time you run the backend, a model of about 1GB will be downloaded. The application will be ready to use once the download is complete.*
+    This service handles the main application logic and orchestration. You can check if it's running by visiting `http://localhost:8000/`.
 
-3.  **Generate character agents**
+**Terminal 2: TTS Service**
+
+1.  **Set up the environment:**
     ```bash
-    python scripts/make_agents.py
+    python -m venv .venv-tts
+    source .venv-tts/bin/activate   # On Windows: .venv-tts\Scripts\activate
+    pip install -r app/api/tts/requirements.txt
     ```
+    *Note: The TTS dependencies include large PyTorch models. The first installation may take some time.*
 
-4.  **Run the backend server**
+2.  **Run the server:**
     ```bash
-    uvicorn app.backend.main:app --reload --port 8000
+    uvicorn app.api.tts.main:app --reload --port 8001
     ```
-    You can check if the backend is running by visiting `http://localhost:8000/`.
+    This service is dedicated to generating audio from text. You can check if it's running by visiting `http://localhost:8001/`.
 
-5.  **Run the frontend**
+### 3. Run the Frontend
 
-    In a new terminal, run the following command:
+Finally, open a third terminal to serve the frontend application.
+
+1.  **Run the server:**
     ```bash
     python -m http.server --directory app/frontend 8080
     ```
-    Then, open your browser and go to `http://localhost:8080/index.html`.
+
+2.  **Open the application:**
+    Open your browser and navigate to `http://localhost:8080/index.html`.
 
 ## Usage
 
