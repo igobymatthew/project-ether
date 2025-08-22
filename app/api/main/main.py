@@ -4,12 +4,7 @@ from pathlib import Path
 import json
 from app.api.main.orchestrator.state import SceneState
 from app.api.main.orchestrator.router import Director
-from app.api.main.orchestrator.local_processors import (
-    LocalSTTProcessor,
-    LocalLLMProcessor,
-    LocalTTSProcessor,
-)
-from genai_processors import Pipeline
+# from genai_processors import Pipeline
 import asyncio
 import logging
 import whisper
@@ -99,56 +94,56 @@ async def ws(ws: WebSocket):
         logger.info(f"Client removed. Total clients: {len(app_state['websockets'])}")
 
 
-@app.websocket("/ws-audio")
-async def ws_audio(ws: WebSocket):
-    """WebSocket endpoint for bidirectional audio streaming."""
-    await ws.accept()
-    logger.info("Audio client connected.")
+# @app.websocket("/ws-audio")
+# async def ws_audio(ws: WebSocket):
+#     """WebSocket endpoint for bidirectional audio streaming."""
+#     await ws.accept()
+#     logger.info("Audio client connected.")
 
-    # 1. Create processor instances
-    stt_proc = LocalSTTProcessor(app_state["whisper_model"])
-    llm_proc = LocalLLMProcessor()
-    tts_proc = LocalTTSProcessor()
+#     # 1. Create processor instances
+#     stt_proc = LocalSTTProcessor(app_state["whisper_model"])
+#     llm_proc = LocalLLMProcessor()
+#     tts_proc = LocalTTSProcessor()
 
-    # 2. Define the pipeline
-    pipeline = Pipeline(
-        [stt_proc, llm_proc, tts_proc],
-        input_queue_maxsize=50,  # Buffer for incoming audio chunks
-        output_queue_maxsize=50, # Buffer for outgoing audio chunks
-    )
+#     # 2. Define the pipeline
+#     pipeline = Pipeline(
+#         [stt_proc, llm_proc, tts_proc],
+#         input_queue_maxsize=50,  # Buffer for incoming audio chunks
+#         output_queue_maxsize=50, # Buffer for outgoing audio chunks
+#     )
 
-    async def stream_from_client():
-        """Task to receive audio from the client and feed it to the pipeline."""
-        try:
-            while True:
-                audio_chunk = await ws.receive_bytes()
-                await pipeline.process(audio_chunk)
-        except WebSocketDisconnect:
-            logger.info("Audio client disconnected (receiver).")
-            await pipeline.stop() # Signal pipeline to shut down
+#     async def stream_from_client():
+#         """Task to receive audio from the client and feed it to the pipeline."""
+#         try:
+#             while True:
+#                 audio_chunk = await ws.receive_bytes()
+#                 await pipeline.process(audio_chunk)
+#         except WebSocketDisconnect:
+#             logger.info("Audio client disconnected (receiver).")
+#             await pipeline.stop() # Signal pipeline to shut down
 
-    async def stream_to_client():
-        """Task to send pipeline output (synthesized audio) back to the client."""
-        try:
-            async for audio_output in pipeline.output():
-                await ws.send_bytes(audio_output)
-            logger.info("Finished sending audio back to client.")
-        except WebSocketDisconnect:
-            logger.info("Audio client disconnected (sender).")
+#     async def stream_to_client():
+#         """Task to send pipeline output (synthesized audio) back to the client."""
+#         try:
+#             async for audio_output in pipeline.output():
+#                 await ws.send_bytes(audio_output)
+#             logger.info("Finished sending audio back to client.")
+#         except WebSocketDisconnect:
+#             logger.info("Audio client disconnected (sender).")
 
 
-    # 3. Run the pipeline and I/O tasks concurrently
-    try:
-        # Start the pipeline processing in the background
-        pipeline_task = asyncio.create_task(pipeline.run())
-        # Start client I/O tasks
-        receiver_task = asyncio.create_task(stream_from_client())
-        sender_task = asyncio.create_task(stream_to_client())
+#     # 3. Run the pipeline and I/O tasks concurrently
+#     try:
+#         # Start the pipeline processing in the background
+#         pipeline_task = asyncio.create_task(pipeline.run())
+#         # Start client I/O tasks
+#         receiver_task = asyncio.create_task(stream_from_client())
+#         sender_task = asyncio.create_task(stream_to_client())
 
-        # Wait for all tasks to complete
-        await asyncio.gather(pipeline_task, receiver_task, sender_task)
+#         # Wait for all tasks to complete
+#         await asyncio.gather(pipeline_task, receiver_task, sender_task)
 
-    except Exception as e:
-        logger.error(f"Error in audio pipeline: {e}", exc_info=True)
-    finally:
-        logger.info("Audio client connection closed.")
+#     except Exception as e:
+#         logger.error(f"Error in audio pipeline: {e}", exc_info=True)
+#     finally:
+#         logger.info("Audio client connection closed.")

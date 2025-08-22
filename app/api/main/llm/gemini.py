@@ -1,5 +1,5 @@
 import os
-import google.generativeai as genai
+# import google.generativeai as genai
 from .base import BaseLLM
 
 class Gemini(BaseLLM):
@@ -23,12 +23,13 @@ class Gemini(BaseLLM):
 
         super().__init__(model=model, api_key=resolved_api_key)
 
-        try:
-            genai.configure(api_key=self.api_key)
-            self.model_instance = genai.GenerativeModel(self.model)
-        except Exception as e:
-            print(f"ERROR: Failed to configure Google Gemini. Check your API key. Details: {e}")
-            raise
+        # try:
+        #     genai.configure(api_key=self.api_key)
+        #     self.model_instance = genai.GenerativeModel(self.model)
+        # except Exception as e:
+        #     print(f"ERROR: Failed to configure Google Gemini. Check your API key. Details: {e}")
+        #     raise
+        pass
 
     def generate_response(self, system_prompt: str, user_prompt: str) -> str:
         """
@@ -39,10 +40,11 @@ class Gemini(BaseLLM):
         # Combine the system and user prompts into a single prompt for Gemini.
         full_prompt = f"{system_prompt}\n\n---\n\nUser query: \"{user_prompt}\""
 
-        try:
-            response = self.model_instance.generate_content(full_prompt)
-            # Ensure response.text is not None before stripping
-            return response.text.strip() if response.text else "..."
-        except Exception as e:
-            print(f"ERROR: Google Gemini request failed. Details: {e}")
-            return "Sorry, my thoughts are a bit scrambled right now. Could you repeat that?"
+        # try:
+        #     response = self.model_instance.generate_content(full_prompt)
+        #     # Ensure response.text is not None before stripping
+        #     return response.text.strip() if response.text else "..."
+        # except Exception as e:
+        #     print(f"ERROR: Google Gemini request failed. Details: {e}")
+        #     return "Sorry, my thoughts are a bit scrambled right now. Could you repeat that?"
+        return "Gemini is not available."

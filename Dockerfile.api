@@ -1,0 +1,30 @@
+# API container: isolates API deps (numpy>=2) without TTS/Torch/Triton
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# System build deps (yaml, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy minimal requirements for API
+# We keep this small: NO torch, NO triton
+COPY requirements.api.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy app code
+COPY app /app/app
+COPY scenes /app/scenes
+
+# Health endpoint needs scene to load
+ENV ETHER_LLM_MODEL=${ETHER_LLM_MODEL}
+ENV ALLOW_ORIGINS=${ALLOW_ORIGINS}
+
+EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=3s --retries=10 CMD curl -fsS http://localhost:8000/ || exit 1
+
+CMD ["uvicorn", "app.api.main.main:app", "--host", "0.0.0.0", "--port", "8000"]

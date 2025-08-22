@@ -1,0 +1,15 @@
+# Clean API stack (no Triton)
+fastapi==0.112.2
+uvicorn[standard]==0.30.6
+pydantic==2.9.0
+PyYAML==6.0.2
+
+# Local LLM (no Triton). Works with numpy>=2.
+llama-cpp-python==0.3.2
+
+# Pin numpy >=2 (API requirement)
+numpy==2.1.0
+
+# Optional Triton-free ASR (swap from openai-whisper)
+ctranslate2==4.3.1
+faster-whisper==1.0.0
