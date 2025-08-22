@@ -4,7 +4,7 @@ import random
 import torchaudio
 import uuid
 
-from app.backend.llm import llm_connector
+from app.api.main.llm import llm_connector
 from .safety import sanitize
 from .state import SceneState
 

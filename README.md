@@ -13,66 +13,67 @@ Project Ether simulates a group call with fictional characters.
 
 ## How to Run
 
-This project consists of three main components: a **main API backend**, a **Text-to-Speech (TTS) service**, and a **frontend**. Due to conflicting Python dependencies between the two backend services, they must be run in separate environments.
+This project uses a "vendored" dependency approach to manage conflicting dependencies between the main API and the TTS service. This allows the services to run on the same machine without requiring virtual environments or Docker.
 
-### 1. Generate Character Agents
+### 1. Install Dependencies
 
-First, generate the agent configuration files needed for the simulation:
+First, create the vendor directories to hold the isolated dependencies for each service:
 ```bash
-python scripts/make_agents.py
+mkdir -p vendor/api_site vendor/tts_site
 ```
 
-### 2. Run the Backend Services
+Next, install the dependencies for each service into its respective directory:
 
-You will need two separate terminals for the backend services.
+**API Dependencies:**
+```bash
+python -m pip install --target vendor/api_site -r requirements-api.txt
+```
+
+**TTS Dependencies:**
+```bash
+python -m pip install --target vendor/tts_site -r requirements-tts.txt
+```
+
+### 2. Run the Services
+
+You will need two separate terminals to run the backend services. The provided launcher scripts in the `ops/` directory will automatically manage the Python path to ensure each service uses its correct set of dependencies.
 
 **Terminal 1: Main API**
-
-1.  **Set up the environment:**
-    ```bash
-    python -m venv .venv-main
-    source .venv-main/bin/activate   # On Windows: .venv-main\Scripts\activate
-    pip install -r app/api/main/requirements.txt
-    ```
-
-2.  **Run the server:**
-    ```bash
-    uvicorn app.api.main.main:app --reload --port 8000
-    ```
-    This service handles the main application logic and orchestration. You can check if it's running by visiting `http://localhost:8000/`.
+```bash
+python ops/run_api.py
+```
+This service handles the main application logic and orchestration. It will be available at `http://localhost:8000`.
 
 **Terminal 2: TTS Service**
-
-1.  **Set up the environment:**
-    ```bash
-    python -m venv .venv-tts
-    source .venv-tts/bin/activate   # On Windows: .venv-tts\Scripts\activate
-    pip install -r app/api/tts/requirements.txt
-    ```
-    *Note: The TTS dependencies include large PyTorch models. The first installation may take some time.*
-
-2.  **Run the server:**
-    ```bash
-    uvicorn app.api.tts.main:app --reload --port 8001
-    ```
-    This service is dedicated to generating audio from text. You can check if it's running by visiting `http://localhost:8001/`.
+```bash
+python ops/run_tts.py
+```
+This service is dedicated to generating audio from text. It will be available at `http://localhost:8010`.
 
 ### 3. Run the Frontend
 
-Finally, open a third terminal to serve the frontend application.
+Finally, open a third terminal to serve the frontend application:
+```bash
+python -m http.server --directory app/frontend 8080
+```
 
-1.  **Run the server:**
-    ```bash
-    python -m http.server --directory app/frontend 8080
-    ```
+### 4. Access the Application
 
-2.  **Open the application:**
-    Open your browser and navigate to `http://localhost:8080/index.html`.
+Open your browser and navigate to `http://localhost:8080/index.html`.
 
 ## Usage
 
 -   **Start Call**: Click the "Dial" button to connect and start the simulation.
 -   **Interact**: Type a message in the input box to have a character respond.
--   **Switch Speakers**: Try asking to speak to a different character, for example, "Can I talk to my brother?".
+-   **Switch Speakers**: Try asking to speak to a different character (e.g., "Can I talk to my brother?").
 -   **Adjust Volume**: Use the slider to change the volume of the background audio.
 -   **End Call**: Click the "End Call" button to stop the simulation.
+
+## Development
+
+This project is configured as a Python package using `pyproject.toml`. If you add new modules or top-level directories like `app` or `services`, update the `[tool.setuptools.packages.find]` section in `pyproject.toml`.
+
+To check for import errors after making changes, you can run the provided smoke test script:
+```bash
+python tools/import_smoke.py
+```

@@ -3,7 +3,7 @@ Agent Builder
 Dynamically constructs agent personas from a high-level "vibe."
 """
 from __future__ import annotations
-from app.backend.llm.gemini import Gemini
+from app.api.main.llm.gemini import Gemini
 import json
 import os
 

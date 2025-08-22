@@ -1,0 +1,41 @@
+# TTS container: isolates Torch/Triton from the API
+# Build arg selects CPU-only or CUDA 12.1 wheels.
+ARG TORCH_VARIANT=cpu
+FROM python:3.11-slim AS base
+
+ARG TORCH_VARIANT
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ---- Torch install matrix ----
+# CPU wheels (no Triton pulled):
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.3.1+cpu torchaudio==2.3.1+cpu
+# CUDA 12.1 wheels (will pull Triton via torch dependency chain or explicitly):
+#   pip install --index-url https://download.pytorch.org/whl/cu121 torch==2.3.1+cu121 torchaudio==2.3.1+cu121 triton==3.2.0
+RUN if [ "$TORCH_VARIANT" = "cpu" ]; then \
+      pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.3.1+cpu torchaudio==2.3.1+cpu; \
+    else \
+      pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu121 \
+        torch==2.3.1+cu121 torchaudio==2.3.1+cu121 && \
+      pip install --no-cache-dir triton==3.2.0; \
+    fi
+
+# TTS server deps (keep generic; swap in chatterbox later)
+COPY requirements.tts.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy a tiny FastAPI for TTS
+COPY services/tts /app/services/tts
+
+ENV TTS_BACKEND=${TTS_BACKEND}
+EXPOSE 8010
+HEALTHCHECK --interval=15s --timeout=3s --retries=10 CMD curl -fsS http://localhost:8010/health || exit 1
+
+CMD ["uvicorn", "services.tts.main:app", "--host", "0.0.0.0", "--port", "8010"]
