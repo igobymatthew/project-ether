@@ -77,3 +77,11 @@ To check for import errors after making changes, you can run the provided smoke 
 ```bash
 python tools/import_smoke.py
 ```
+
+## Testing
+
+```bash
+python -m tools.import_smoke
+```
+
+All imports currently succeed.
